@@ -14,16 +14,20 @@
             <div class="header-content">
                 <div class="logo">
                     <h1>EOCS Admin Panel</h1>
+                    <small>Full access: <%= adminRole === 'tech-support' ? 'Technical Support' : 'Administrator' %></small>
                 </div>
                 <div class="admin-nav">
-                    <a href="/scoreboard" class="nav-btn">
+                    <a href="/scoreboard?live=1" class="nav-btn">
                         <i class="fas fa-trophy"></i>
-                        Scoreboard
+                        Live Scoreboard
                     </a>
-                    <a href="/admin/logout" class="logout-btn">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Logout
-                    </a>
+                    <form method="POST" action="/admin/logout" style="margin: 0;">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" class="logout-btn" style="font: inherit; background: transparent; cursor: pointer;">
+                            <i class="fas fa-sign-out-alt"></i>
+                            Logout
+                        </button>
+                    </form>
                 </div>
             </div>
         </header>
@@ -32,8 +36,73 @@
             <div class="admin-tabs">
                 <button class="tab-btn active" data-tab="submissions">Submissions</button>
                 <button class="tab-btn" data-tab="reviews">Review Queue <span id="review-count" class="badge"></span></button>
+                <button class="tab-btn" data-tab="scores">Score Management</button>
                 <button class="tab-btn" data-tab="announcements">Announcements</button>
                 <button class="tab-btn" data-tab="clarifications">Clarifications</button>
+            </div>
+
+            <div class="tab-content" id="scores-tab" style="display: none;">
+                <h2>Manual Score Management</h2>
+                <div class="review-instructions">
+                    <p><strong>Full admin control:</strong> Select one team, then change any subtask to correct, wrong, or unsolved.</p>
+                    <p>Every change is server-validated and recorded in the audit log. The submission and judging workflow is unchanged.</p>
+                </div>
+                <form method="GET" action="/admin" class="admin-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scoreTeamId">Team:</label>
+                            <select id="scoreTeamId" name="teamId" required>
+                                <option value="">Choose a team</option>
+                                <% scoreboard.forEach(team => { %>
+                                    <option value="<%= team.teamId %>" <%= selectedTeamId === team.teamId ? 'selected' : '' %>>
+                                        <%= team.teamId %> - <%= team.totalScore %> points / <%= team.penalties %> penalty
+                                    </option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <button type="submit" class="admin-btn">Load Team</button>
+                    </div>
+                </form>
+
+                <% if (selectedTeamScore) { %>
+                    <div class="review-instructions">
+                        <p><strong><%= selectedTeamScore.teamId %></strong> - <%= selectedTeamScore.totalScore %> points, <%= selectedTeamScore.totalPenalty %> penalty minutes, <%= selectedTeamScore.totalTrials %> trials</p>
+                    </div>
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Problem</th>
+                                <th>Subtask</th>
+                                <th>Status</th>
+                                <th>Points</th>
+                                <th>Trials</th>
+                                <th>Penalty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% selectedTeamScore.problems.forEach(problem => { %>
+                                <% problem.sections.forEach(section => { %>
+                                    <tr>
+                                        <td>Problem <%= problem.displayId || problem.id %>: <%= problem.title %></td>
+                                        <td><%= section.id %></td>
+                                        <td>
+                                            <select class="section-select" data-team="<%= selectedTeamScore.teamId %>" data-problem="<%= problem.id %>" data-section="<%= section.id %>">
+                                                <option value="unsolved" <%= section.status === 'unsolved' ? 'selected' : '' %>>Unsolved</option>
+                                                <option value="wrong" <%= section.status === 'wrong' ? 'selected' : '' %>>Wrong</option>
+                                                <option value="correct" <%= section.status === 'correct' ? 'selected' : '' %>>Correct</option>
+                                            </select>
+                                        </td>
+                                        <td><%= section.score %> / <%= section.maxPoints || 20 %></td>
+                                        <td><%= section.trials %></td>
+                                        <td><%= section.penalty %></td>
+                                    </tr>
+                                <% }); %>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                <% } else if (selectedTeamId) { %>
+                    <p class="no-data">Team not found.</p>
+                <% } %>
             </div>
 
             <div class="tab-content" id="submissions-tab">
@@ -53,7 +122,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <% submissions.slice(-20).reverse().forEach(submission => { %>
+                                <% submissions.slice(0, 20).forEach(submission => { %>
                                     <tr>
                                         <td><%= new Date(submission.timestamp).toLocaleString() %></td>
                                         <td><%= submission.teamId %></td>
@@ -95,7 +164,7 @@
             <div class="tab-content" id="reviews-tab" style="display: none;">
                 <h2>Submission Review Queue</h2>
                 <div class="review-instructions">
-                    <p><strong>Instructions:</strong> Review submissions in Google Forms, then mark them as correct or wrong below.</p>
+                    <p><strong>Instructions:</strong> Review the submitted code in this dashboard, then mark it as correct or wrong below.</p>
                     <p><strong>Purple status</strong> means the submission is waiting for your review.</p>
                 </div>
                 
@@ -127,7 +196,7 @@
                                             </span>
                                         </td>
                                         <td class="code-preview" title="Click to view full code">
-                                            <button class="view-code-btn" onclick="viewFullCode('<%= submission._id %>', `<%= submission.codePreview %>`)">
+                                            <button class="view-code-btn" onclick="viewFullCode('<%= submission._id %>')">
                                                 View Code
                                             </button>
                                         </td>
@@ -330,20 +399,20 @@
     <div id="notification" class="notification"></div>
 
     <script>
+        const csrfToken = '<%= csrfToken %>';
         // Tab switching
+        const activateTab = tabName => {
+            document.querySelectorAll('.tab-btn').forEach(button => button.classList.toggle('active', button.dataset.tab === tabName));
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = content.id === tabName + '-tab' ? 'block' : 'none';
+            });
+        };
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                const tabName = this.dataset.tab;
-                
-                // Remove active from all tabs
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-                
-                // Activate current tab
-                this.classList.add('active');
-                document.getElementById(tabName + '-tab').style.display = 'block';
+                activateTab(this.dataset.tab);
             });
         });
+        if (<%= selectedTeamId ? 'true' : 'false' %>) activateTab('scores');
 
         // Section status change handling
         document.querySelectorAll('.section-select').forEach(select => {
@@ -357,7 +426,8 @@
                     const response = await fetch('/admin/update-section', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
                         },
                         body: JSON.stringify({
                             teamId,
@@ -408,7 +478,8 @@
                 const response = await fetch('/admin/announcement', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
                     },
                     body: JSON.stringify(data)
                 });
@@ -442,7 +513,8 @@
                 const response = await fetch('/admin/clarification/answer', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
                     },
                     body: JSON.stringify(data)
                 });
@@ -480,7 +552,8 @@
 
             try {
                 const response = await fetch(`/admin/announcement/${announcementId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-Token': csrfToken }
                 });
 
                 const result = await response.json();
@@ -504,7 +577,8 @@
                 const response = await fetch('/admin/review-submission', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
                     },
                     body: JSON.stringify({
                         submissionId,
@@ -549,7 +623,7 @@
         setInterval(updateReviewCount, 30000); // Update every 30 seconds
 
         // View full code function
-        async function viewFullCode(submissionId, preview) {
+        async function viewFullCode(submissionId) {
             try {
                 const response = await fetch(`/admin/submission/${submissionId}/code`);
                 const data = await response.json();

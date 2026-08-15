@@ -1,4 +1,8 @@
 // In-memory storage fallback when MongoDB is not available
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import { DEFAULT_SUBTASK_POINTS, resolveSubtaskPoints } from './scoring.js';
+
 class InMemoryStorage {
     constructor() {
         this.teams = new Map();
@@ -18,11 +22,12 @@ class InMemoryStorage {
         const team = {
             ...teamData,
             teamId: teamData.teamId.toUpperCase(),
+            password: await bcrypt.hash(teamData.password, 10),
             createdAt: new Date(),
             loginTime: null,
             isActive: true,
             comparePassword: function(password) {
-                return Promise.resolve(this.password === password);
+                return bcrypt.compare(password, this.password);
             },
             updateLoginTime: function() {
                 this.loginTime = new Date();
@@ -46,13 +51,19 @@ class InMemoryStorage {
                 this.totalPenalty = 0;
                 this.totalTrials = 0;
                 
-                for (let i = 1; i <= 4; i++) {
-                    const problem = this.problems[i];
-                    if (problem.status === 'correct') {
-                        this.totalScore += 1;
+                for (const problem of Object.values(this.problems || {})) {
+                    const sections = Object.values(problem.sections || {});
+                    if (sections.length > 0) {
+                        problem.totalScore = sections.reduce((sum, section) => sum + Number(section.score || 0), 0);
+                        this.totalScore += problem.totalScore;
+                        this.totalPenalty += sections.reduce((sum, section) => sum + Number(section.penalty || 0), 0);
+                        const sectionTrials = sections.reduce((sum, section) => sum + Number(section.trials || 0), 0);
+                        this.totalTrials += sectionTrials || Number(problem.trials || 0);
+                    } else {
+                        this.totalScore += problem.status === 'correct' ? resolveSubtaskPoints(problem.maxPoints) : 0;
+                        this.totalPenalty += Number(problem.penalty || 0);
+                        this.totalTrials += Number(problem.trials || 0);
                     }
-                    this.totalPenalty += problem.penalty;
-                    this.totalTrials += problem.trials;
                 }
                 
                 this.lastUpdated = new Date();
@@ -61,23 +72,18 @@ class InMemoryStorage {
             updateProblem: function(problemId, status) {
                 const problem = this.problems[problemId];
                 
-                if (status === 'correct' && problem.status !== 'correct') {
-                    problem.status = 'correct';
-                    problem.solvedAt = new Date();
-                    problem.penalty = problem.trials * 10;
-                } else if (status === 'wrong') {
-                    problem.status = 'wrong';
-                } else if (status === 'unsolved') {
-                    problem.status = 'unsolved';
-                    problem.solvedAt = null;
-                    problem.penalty = 0;
+                for (const section of Object.values(problem.sections || {})) {
+                    section.status = status;
+                    section.score = status === 'correct' ? resolveSubtaskPoints(section.maxPoints) : 0;
                 }
+                problem.status = status;
+                problem.solvedAt = status === 'correct' ? (problem.solvedAt || new Date()) : null;
                 
                 this.calculateTotals();
                 return Promise.resolve(this);
             },
             updateSection: function(problemId, section, status) {
-                const problem = this.problems[problemId];
+                let problem = this.problems[problemId];
                 if (!problem) {
                     this.problems[problemId] = {
                         sections: {
@@ -91,6 +97,7 @@ class InMemoryStorage {
                         trials: 0,
                         penalty: 0
                     };
+                    problem = this.problems[problemId];
                 }
                 
                 if (!problem.sections) {
@@ -104,27 +111,30 @@ class InMemoryStorage {
                 }
                 
                 if (!problem.sections[section]) {
-                    problem.sections[section] = { status: 'unsolved', trials: 0 };
+                    problem.sections[section] = {
+                        status: 'unsolved', score: 0, maxPoints: DEFAULT_SUBTASK_POINTS, trials: 0, penalty: 0
+                    };
                 }
                 
                 // Update section status
                 problem.sections[section].status = status;
+                problem.sections[section].score = status === 'correct'
+                    ? resolveSubtaskPoints(problem.sections[section].maxPoints)
+                    : 0;
                 
                 // Update overall problem status based on section statuses
                 const sections = problem.sections;
                 const correctSections = Object.values(sections).filter(s => s.status === 'correct').length;
                 const wrongSections = Object.values(sections).filter(s => s.status === 'wrong').length;
                 
-                if (correctSections === 5) {
+                if (correctSections === Object.keys(sections).length) {
                     problem.status = 'correct';
                     problem.solvedAt = new Date();
-                    problem.penalty = problem.trials * 10;
-                } else if (wrongSections > 0) {
-                    problem.status = 'wrong';
+                } else if (correctSections > 0 || wrongSections > 0) {
+                    problem.status = 'partial';
                 } else {
                     problem.status = 'unsolved';
                     problem.solvedAt = null;
-                    problem.penalty = 0;
                 }
                 
                 this.calculateTotals();
@@ -187,10 +197,11 @@ class InMemoryStorage {
         console.log('🔄 Initializing sample data for in-memory storage...');
         
         // Create sample teams
+        const devPassword = process.env.DEV_TEAM_PASSWORD || crypto.randomBytes(24).toString('base64url');
         const sampleTeams = [
             {
                 teamId: 'TEAM001',
-                password: 'password123',
+                password: devPassword,
                 teamName: 'Code Warriors',
                 members: [
                     { name: 'Ahmed Mohamed', email: 'ahmed@example.com', grade: '12' },
@@ -200,7 +211,7 @@ class InMemoryStorage {
             },
             {
                 teamId: 'TEAM002',
-                password: 'password123',
+                password: devPassword,
                 teamName: 'Algorithm Masters',
                 members: [
                     { name: 'Omar Hassan', email: 'omar@example.com', grade: '12' },
@@ -210,7 +221,7 @@ class InMemoryStorage {
             },
             {
                 teamId: 'TEAM003',
-                password: 'password123',
+                password: devPassword,
                 teamName: 'Binary Builders',
                 members: [
                     { name: 'Youssef Khaled', email: 'youssef@example.com', grade: '11' },
@@ -275,11 +286,7 @@ class InMemoryStorage {
         }
 
         console.log('✅ Sample data initialized');
-        console.log('\n📋 Team Login Credentials:');
-        console.log('========================');
-        sampleTeams.forEach(team => {
-            console.log(`Team ID: ${team.teamId} | Password: ${team.password} | Team: ${team.teamName}`);
-        });
+        if (!process.env.DEV_TEAM_PASSWORD) console.warn('Set DEV_TEAM_PASSWORD to log in to development fallback teams.');
     }
 }
 

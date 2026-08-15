@@ -40,4 +40,6 @@ announcementSchema.pre('save', function(next) {
     next();
 });
 
+announcementSchema.index({ isPublic: 1, createdAt: -1 });
+
 export default mongoose.model('Announcement', announcementSchema);

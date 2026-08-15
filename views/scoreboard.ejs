@@ -84,6 +84,17 @@
             letter-spacing: 1px;
         }
 
+        .scoreboard-notice {
+            margin: -20px 0 28px;
+            padding: 14px 18px;
+            border: 1px solid var(--egyptian-gold);
+            border-radius: 8px;
+            background: rgba(173, 130, 49, 0.14);
+            color: var(--egyptian-beige);
+            text-align: center;
+            line-height: 1.5;
+        }
+
         .home-btn {
             display: inline-block;
             padding: 12px 24px;
@@ -330,7 +341,7 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <main class="container">
         <a href="/" class="home-btn">
             <i class="fas fa-home"></i> Back to Home
         </a>
@@ -339,10 +350,22 @@
             <h1><i class="fas fa-trophy"></i> EOCS Scoreboard</h1>
             <p class="subtitle">Egyptian Olympiad in Computational Science</p>
         </div>
+
+        <% if (scoreboardState?.isFrozen) { %>
+            <div class="scoreboard-notice" role="status">
+                <strong><i class="fas fa-eye-slash"></i> Blind period active.</strong>
+                The public scoreboard is frozen at <%= new Date(scoreboardState.freezeTime).toLocaleString() %> for the final <%= scoreboardState.blindMinutes %> minutes. Final results appear when the contest ends.
+            </div>
+        <% } else if (scoreboardState?.isAdminLive) { %>
+            <div class="scoreboard-notice" role="status">
+                <strong><i class="fas fa-user-shield"></i> Admin live view.</strong>
+                This view continues to show current judging results during the blind period.
+            </div>
+        <% } %>
         
         <div class="decorative-border"></div>
         
-        <div class="table-wrapper">
+        <div class="table-wrapper" role="region" aria-label="Scoreboard results" tabindex="0">
             <table class="scoreboard-table">
             <thead>
                 <tr>
@@ -354,7 +377,7 @@
                     <% if (problems && Array.isArray(problems)) { %>
                         <% problems.forEach(problem => { %>
                             <% const sectionKeys = Array.from(problem.sections.keys()).sort((a, b) => parseInt(a) - parseInt(b)); %>
-                            <th colspan="<%= sectionKeys.length + 1 %>">Problem <%= problem.id %></th>
+                            <th colspan="<%= sectionKeys.length + 1 %>">Problem <%= problem.section %>.<%= problem.number %></th>
                         <% }); %>
                     <% } %>
                 </tr>
@@ -440,7 +463,7 @@
         <div class="decorative-border"></div>
         
         <div class="legend" style="background: rgba(63, 57, 56, 0.8); padding: 20px; border-radius: 8px; border: 1px solid var(--egyptian-gold); margin: 20px 0;">
-            <h3 style="color: var(--egyptian-gold); margin-bottom: 15px; text-align: center;">Legend</h3>
+            <h2 style="color: var(--egyptian-gold); margin-bottom: 15px; text-align: center;">Legend</h2>
             <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <div style="background: rgba(46, 204, 113, 0.8); color: white; padding: 4px 8px; border-radius: 4px;">
@@ -468,22 +491,28 @@
                 </div>
             </div>
             <p style="text-align: center; margin-top: 15px; color: var(--egyptian-beige); font-size: 0.9rem;">
-                <strong>Scoring:</strong> Each section = 20 points | Total per problem = 100 points | Small numbers show attempt count
+                <strong>Scoring:</strong> Each problem = 20 points | Subtasks use the published PDF weights | Each wrong review = 15 penalty minutes | Small numbers show attempt count
             </p>
         </div>
         
         <div class="footer-info">
             <p>Last updated: <span class="update-time"><%= new Date().toLocaleString() %></span></p>
-            <p><i class="fas fa-sync-alt"></i> Auto-refreshes every 30 seconds</p>
-            <p>&copy; 2025 Egyptian Olympiad in Computational Science</p>
+            <% if (scoreboardState?.isFrozen) { %>
+                <p><i class="fas fa-pause"></i> Public updates paused until the contest ends</p>
+            <% } else { %>
+                <p><i class="fas fa-sync-alt"></i> Auto-refreshes every 30 seconds</p>
+            <% } %>
+            <p>&copy; 2026 Egyptian Olympiad in Computational Science</p>
         </div>
-    </div>
+    </main>
 
     <script>
-        // Auto-refresh scoreboard every 30 seconds
-        setInterval(() => {
-            location.reload();
-        }, 30000);
+        <% if (!scoreboardState?.isFrozen) { %>
+            // Auto-refresh live and final scoreboards every 30 seconds.
+            setInterval(() => {
+                location.reload();
+            }, 30000);
+        <% } %>
     </script>
 </body>
 </html>

@@ -12,7 +12,7 @@ const teamSchema = new mongoose.Schema({
     password: {
         type: String,
         required: true,
-        minlength: 6
+        minlength: 12
     },
     teamName: {
         type: String,
@@ -49,6 +49,10 @@ const teamSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    accessExpiresAt: {
+        type: Date,
+        default: null
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -77,6 +81,10 @@ teamSchema.methods.comparePassword = async function(candidatePassword) {
 teamSchema.methods.updateLoginTime = function() {
     this.loginTime = new Date();
     return this.save();
+};
+
+teamSchema.methods.isAccessExpired = function(now = new Date()) {
+    return Boolean(this.accessExpiresAt && this.accessExpiresAt <= now);
 };
 
 export default mongoose.model('Team', teamSchema);

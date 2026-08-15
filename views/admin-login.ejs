@@ -9,7 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 </head>
 <body class="login-page">
-    <div class="login-container">
+    <main class="login-container">
         <div class="login-header">
             <div class="logo">
                 <h1>EOCS</h1>
@@ -19,6 +19,7 @@
         
         <div class="login-form-container">
             <form class="login-form" method="POST" action="/admin/login">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <h2>Admin Login</h2>
                 
                 <% if (typeof error !== 'undefined') { %>
@@ -48,6 +49,6 @@
                 <p><a href="/">Back to Platform</a></p>
             </div>
         </div>
-    </div>
+    </main>
 </body>
 </html>

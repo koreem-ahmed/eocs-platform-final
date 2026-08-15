@@ -35,10 +35,13 @@
                 </div>
                 <div class="team-info">
                     <span>Team: <%= teamId %></span>
-                    <a href="/logout" class="logout-btn">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Logout
-                    </a>
+                    <form method="POST" action="/logout" style="margin: 0;">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" class="logout-btn" style="font: inherit; background: transparent; cursor: pointer;">
+                            <i class="fas fa-sign-out-alt"></i>
+                            Logout
+                        </button>
+                    </form>
                 </div>
             </div>
         </header>
@@ -179,13 +182,10 @@
                                     <option value="">Select a problem</option>
                                     <% if (problems && problems.length > 0) { %>
                                         <% problems.forEach(problem => { %>
-                                            <option value="<%= problem.id %>"><%= problem.section %><%= problem.number %>: <%= problem.title %></option>
+                                            <option value="<%= problem.id %>"><%= problem.section %>.<%= problem.number %>: <%= problem.title %></option>
                                         <% }); %>
                                     <% } else { %>
-                                        <option value="1">A1: Problem 1</option>
-                                        <option value="2">A2: Problem 2</option>
-                                        <option value="3">A3: Problem 3</option>
-                                        <option value="4">A4: Problem 4</option>
+                                        <option value="" disabled>Problems are not available yet</option>
                                     <% } %>
                                 </select>
                             </div>
@@ -208,9 +208,9 @@
                         <% const sectionOrder = ['1', '2', '3', '4']; %>
                         <% const sectionNames = {
                             '1': 'Physics',
-                            '2': 'Chemistry', 
-                            '3': 'Mathematics',
-                            '4': 'Biology'
+                            '2': 'Biology and Neuroscience',
+                            '3': 'Chemistry',
+                            '4': 'Mathematics'
                         }; %>
                         
                         <% sectionOrder.forEach(sectionNumber => { %>
@@ -226,14 +226,14 @@
                                             <div class="problem-card">
                                                 <div class="problem-header">
                                                     <h4><%= problem.title %></h4>
-                                                    <span class="problem-id"><%= problem.section %><%= problem.number %></span>
+                                                    <span class="problem-id"><%= problem.section %>.<%= problem.number %></span>
                                                 </div>
                                                 <div class="problem-sections">
                                                     <a href="/problem/<%= problem.id %>" class="section-link">
                                                         <div class="section-badge">
                                                             <span class="section-label">
-                                                                <% if (problem.sections && problem.sections.size > 0) { %>
-                                                                    <%= problem.sections.size %> Subtasks
+                                                                <% if (problem.sections && problem.sections.length > 0) { %>
+                                                                    <%= problem.sections.length %> Subtasks
                                                                 <% } else { %>
                                                                     View Problem
                                                                 <% } %>
@@ -274,6 +274,7 @@
     </div>
 
     <script>
+        const csrfToken = '<%= csrfToken %>';
         // Timer script
         <% if (competitionStatus.status === 'before') { %>
             const targetTime = new Date('<%= startTime %>').getTime();
@@ -348,7 +349,8 @@
                     const response = await fetch('/clarification', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
                         },
                         body: JSON.stringify(data)
                     });

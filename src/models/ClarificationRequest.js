@@ -11,7 +11,7 @@ const clarificationRequestSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 1,
-        max: 100 // Allow for more problems
+        max: 19
     },
     question: {
         type: String,
@@ -40,5 +40,8 @@ const clarificationRequestSchema = new mongoose.Schema({
         default: null
     }
 });
+
+clarificationRequestSchema.index({ status: 1, isPublic: 1, answeredAt: -1 });
+clarificationRequestSchema.index({ teamId: 1, status: 1, answeredAt: -1 });
 
 export default mongoose.model('ClarificationRequest', clarificationRequestSchema);

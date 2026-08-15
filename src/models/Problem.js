@@ -2,11 +2,11 @@ import mongoose from 'mongoose';
 
 const problemSchema = new mongoose.Schema({
     id: { type: Number, required: true, unique: true },
-    section: { type: String, required: true, enum: ['1', '2', '3', '4'] }, // Physics, Chemistry, Mathematics, Biology
+    section: { type: String, required: true, enum: ['1', '2', '3', '4'] }, // Physics, Biology and Neuroscience, Chemistry, Mathematics
     number: { type: Number, required: true },
     title: { type: String, required: true },
     description: { type: String, required: true },
-    maxPoints: { type: Number, default: 100 },
+    maxPoints: { type: Number, default: 20 },
     sections: {
         type: Map,
         of: {
@@ -22,7 +22,6 @@ const problemSchema = new mongoose.Schema({
 
 // Indexes
 problemSchema.index({ section: 1, number: 1 });
-problemSchema.index({ id: 1 });
 
 // Methods
 problemSchema.methods.getSectionArray = function() {

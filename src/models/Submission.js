@@ -30,6 +30,11 @@ const submissionSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    codeHash: {
+        type: String,
+        match: /^[a-f0-9]{64}$/,
+        default: null
+    },
     submittedAt: {
         type: Date,
         default: Date.now
@@ -55,22 +60,19 @@ const submissionSchema = new mongoose.Schema({
     reviewNotes: {
         type: String,
         default: ''
-    },
-    googleFormSubmitted: {
-        type: Boolean,
-        default: true // Assume it's submitted to Google Forms
-    },
-    googleFormResponse: {
-        type: String,
-        default: null
     }
 });
 
 // Indexes for better query performance
 submissionSchema.index({ teamId: 1, submittedAt: -1 });
+submissionSchema.index({ teamId: 1, problemId: 1, section: 1, submittedAt: -1 });
 submissionSchema.index({ problemId: 1, section: 1 });
 submissionSchema.index({ submittedAt: -1 });
 submissionSchema.index({ reviewStatus: 1 });
+submissionSchema.index(
+    { teamId: 1, problemId: 1, section: 1 },
+    { unique: true, partialFilterExpression: { status: 'pending' }, name: 'one_pending_submission_per_section' }
+);
 
 // Method to get language display name
 submissionSchema.methods.getLanguageDisplay = function() {

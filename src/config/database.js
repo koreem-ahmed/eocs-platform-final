@@ -1,38 +1,54 @@
 import mongoose from 'mongoose';
+import dns from 'node:dns';
 
 let isConnected = false;
+let listenersRegistered = false;
+
+const configureMongoDns = () => {
+    const servers = (process.env.MONGODB_DNS_SERVERS || '')
+        .split(',')
+        .map((server) => server.trim())
+        .filter(Boolean);
+
+    if (servers.length > 0) dns.setServers(servers);
+};
 
 const connectDB = async () => {
     try {
+        if (mongoose.connection.readyState === 1) {
+            isConnected = true;
+            return mongoose.connection;
+        }
         if (!process.env.MONGODB_URI) {
             console.log('⚠️  No MongoDB URI found. Running in in-memory mode.');
             return null;
         }
 
+        configureMongoDns();
+
         const conn = await mongoose.connect(process.env.MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000, // 5 second timeout
+            serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS || 5000),
+            maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE || 20),
+            minPoolSize: Number(process.env.MONGODB_MIN_POOL_SIZE || 1)
         });
 
         console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
         isConnected = true;
         
-        // Handle connection events
-        mongoose.connection.on('error', (err) => {
-            console.error('MongoDB connection error:', err);
-            isConnected = false;
-        });
-
-        mongoose.connection.on('disconnected', () => {
-            console.log('MongoDB disconnected');
-            isConnected = false;
-        });
-
-        // Graceful close on app termination
-        process.on('SIGINT', async () => {
-            await mongoose.connection.close();
-            console.log('MongoDB connection closed through app termination');
-            process.exit(0);
-        });
+        if (!listenersRegistered) {
+            listenersRegistered = true;
+            mongoose.connection.on('error', (err) => {
+                console.error('MongoDB connection error:', err.message);
+                isConnected = false;
+            });
+            mongoose.connection.on('disconnected', () => {
+                isConnected = false;
+            });
+            process.on('SIGINT', async () => {
+                await mongoose.connection.close();
+                process.exit(0);
+            });
+        }
 
         return conn;
     } catch (error) {
@@ -43,5 +59,10 @@ const connectDB = async () => {
     }
 };
 
-export { connectDB, isConnected };
+const disconnectDB = async () => {
+    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+    isConnected = false;
+};
+
+export { connectDB, disconnectDB, isConnected };
 export default connectDB;

@@ -83,10 +83,12 @@
     
     .problem-text code, .subtask-description code {
       background-color: #f5f5f5;
+      color: #2d2726;
       padding: 2px 4px;
       border-radius: 3px;
       font-family: 'Courier New', monospace;
       font-size: 0.9em;
+      overflow-wrap: anywhere;
     }
     
     .problem-text table, .subtask-description table {
@@ -104,7 +106,8 @@
     }
     
     .problem-text th, .subtask-description th {
-      background-color: #f2f2f2;
+      background-color: #e8d9b8;
+      color: #2d2726;
       font-weight: bold;
     }
     
@@ -120,6 +123,13 @@
     
     .mjx-container {
       margin: 0.5em 0;
+    }
+
+    mjx-container[display="true"] {
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0.35em 0;
     }
     
     .problem-text blockquote, .subtask-description blockquote {
@@ -149,7 +159,7 @@
         </div>
         <div class="problem-title">
                     <div class="problem-meta">
-            <span class="section-info">Problem <%= problemData ? problemData.section + problemData.number : problemId %></span>
+            <span class="section-info">Problem <%= problemData ? problemData.section + '.' + problemData.number : problemId %></span>
             <span class="team-info">Team: <%= teamId %></span>
           </div>
         </div>
@@ -161,25 +171,7 @@
           <h2>Problem Statement</h2>
           <div class="problem-text">
             <% if (problemData) { %>
-            <div class="problem-main-description">
-              <%- problemData.description
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/\\texttt\{(.*?)\}/g, '<code>$1</code>')
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/\n/g, '<br>')
-                .replace(/\|\s*(.*?)\s*\|/g, function(match, content) {
-                  // Simple table handling
-                  if (content.includes('|')) {
-                    const cells = content.split('|').map(cell => `<td>${cell.trim()}</td>`).join('');
-                    return `<tr>${cells}</tr>`;
-                  }
-                  return match;
-                })
-                .replace(/^-\s/gm, '<li>')
-                .replace(/<\/p><p>/g, '</p>\n<p>')
-              %>
-            </div>
+            <div class="problem-main-description"><%- renderMarkdown(problemData.description) %></div>
             <% } else { %>
             <div class="no-problem-data">
               <h3>Problem <%= problemId %></h3>
@@ -203,16 +195,7 @@
             </div>
 
             <div class="subtask-description">
-              <%- sectionData.description
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/\\texttt\{(.*?)\}/g, '<code>$1</code>')
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/\n-\s/g, '</p><ul><li>')
-                .replace(/\n(\d+)\.\s/g, '</p><ol><li>')
-                .replace(/\n/g, '<br>')
-                .replace(/<\/p><p>/g, '</p>\n<p>')
-              %>
+              <%- renderMarkdown(sectionData.description) %>
             </div>
 
             <div class="submission-form-container" id="form-container-<%= sectionData.name %>">
@@ -285,6 +268,7 @@
   <script>
     const problemId = '<%= problemId %>';
     const teamId = '<%= teamId %>';
+    const csrfToken = '<%= csrfToken %>';
 
     // Check submission status for all subtasks
     async function checkAllSubmissionStatuses() {
@@ -490,17 +474,8 @@
       try {
         const formData = new FormData(form);
 
-        // Debug: Check what we're sending
         const language = formData.get('language');
         const code = formData.get('code');
-        const explanation = formData.get('explanation');
-
-        console.log('Submission debug:', {
-          section: section,
-          language: language,
-          code: code ? `${code.length} characters` : 'null/empty',
-          explanation: explanation ? `${explanation.length} characters` : 'null/empty'
-        });
 
         if (!language || !code) {
           alert(`Missing required fields:\nLanguage: ${language || 'missing'}\nCode: ${code ? 'provided' : 'missing'}`);
@@ -509,6 +484,7 @@
 
         const response = await fetch(`/submit/${problemId}/${section}`, {
           method: 'POST',
+          headers: { 'X-CSRF-Token': csrfToken },
           body: formData
         });
 
