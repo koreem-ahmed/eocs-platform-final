@@ -11,7 +11,7 @@ const clarificationRequestSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 1,
-        max: 19
+        max: 20
     },
     question: {
         type: String,
